@@ -54,6 +54,10 @@ enum upipe_ts_demux_command {
     UPIPE_TS_DEMUX_SET_CONFORMANCE,
     /** sets the BISS-CA private key file (const char *) */
     UPIPE_TS_DEMUX_SET_PRIVATE_KEY,
+    /** enables or disables EITp/f decoding (int) */
+    UPIPE_TS_DEMUX_SET_EIT_ENABLED,
+    /** enables  or disables EITs table ID decoding (int) */
+    UPIPE_TS_DEMUX_SET_EITS_ENABLED,
 };
 
 /** @This returns the currently detected conformance mode. It cannot return
@@ -96,6 +100,32 @@ static inline int upipe_ts_demux_set_private_key(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_TS_DEMUX_SET_PRIVATE_KEY,
             UPIPE_TS_DEMUX_SIGNATURE, private_key);
+}
+
+/** @This enables or disables EITp/f decoding.
+ *
+ * @param upipe description structure of the pipe
+ * @param enabled true to enable decoding, false otherwise
+ * @return an error code
+ */
+static inline int upipe_ts_demux_set_eit_enabled(struct upipe *upipe,
+                                                 bool enabled)
+{
+    return upipe_control(upipe, UPIPE_TS_DEMUX_SET_EIT_ENABLED,
+                         UPIPE_TS_DEMUX_SIGNATURE, enabled ? 1 : 0);
+}
+
+/** @This enables or disables EITs table ID decoding.
+ *
+ * @param upipe description structure of the pipe
+ * @param enabled true to enable decoding, false otherwise
+ * @return an error code
+ */
+static inline int upipe_ts_demux_set_eits_enabled(struct upipe *upipe,
+                                                  bool enabled)
+{
+    return upipe_control(upipe, UPIPE_TS_DEMUX_SET_EITS_ENABLED,
+                         UPIPE_TS_DEMUX_SIGNATURE, enabled ? 1 : 0);
 }
 
 /** @This returns the management structure for all ts_demux pipes.

@@ -284,6 +284,10 @@ struct upipe_ts_demux {
     bool auto_conformance;
     /** current conformance */
     enum upipe_ts_conformance conformance;
+    /** enable EITp/f decoder */
+    bool eit_enabled;
+    /** enable EITs table ID decoder */
+    bool eits_enabled;
 
     /** probe to get new flow events from inner pipes created by psi_pid
      * objects */
@@ -1344,7 +1348,8 @@ static int upipe_ts_demux_configure_eit(struct upipe *upipe,
     struct upipe_ts_demux_mgr *ts_demux_mgr =
         upipe_ts_demux_mgr_from_upipe_mgr(upipe_ts_demux_to_upipe(demux)->mgr);
 
-    if (!ubase_check(uref_ts_flow_get_eit(flow_def))) {
+    if (!demux->eit_enabled ||
+        !ubase_check(uref_ts_flow_get_eit(flow_def))) {
         if (upipe_ts_demux_program->psi_split_output_eit != NULL) {
             upipe_release(upipe_ts_demux_program->psi_split_output_eit);
             upipe_ts_demux_psi_pid_release(upipe_ts_demux_program->psi_pid_eit);
@@ -1430,7 +1435,8 @@ static int upipe_ts_demux_configure_eits(struct upipe *upipe,
     struct upipe_ts_demux_mgr *ts_demux_mgr =
         upipe_ts_demux_mgr_from_upipe_mgr(upipe_ts_demux_to_upipe(demux)->mgr);
 
-    if (!ubase_check(uref_ts_flow_get_eit_schedule(flow_def))) {
+    if (!demux->eits_enabled ||
+        !ubase_check(uref_ts_flow_get_eit_schedule(flow_def))) {
         if (upipe_ts_demux_program->psi_split_output_eits[n] != NULL) {
             upipe_release(upipe_ts_demux_program->psi_split_output_eits[n]);
             upipe_ts_demux_psi_pid_release(upipe_ts_demux_program->psi_pid_eits[n]);
@@ -3194,6 +3200,8 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
     ulist_init(&upipe_ts_demux->psi_pids);
     upipe_ts_demux->conformance = UPIPE_TS_CONFORMANCE_DVB_NO_TABLES;
     upipe_ts_demux->auto_conformance = true;
+    upipe_ts_demux->eit_enabled = true;
+    upipe_ts_demux->eits_enabled = true;
     upipe_ts_demux->nit_pid = 0;
     upipe_ts_demux->flow_def_input = NULL;
 
@@ -3458,6 +3466,34 @@ static int _upipe_ts_demux_set_conformance(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This enables or disables EITp/f decoding.
+ *
+ * @param upipe description structure of the pipe
+ * @param enabled true to enable decoding, false otherwise
+ * @return an error code
+ */
+static int _upipe_ts_demux_set_eit_enabled(struct upipe *upipe,
+                                           bool enabled)
+{
+    struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
+    upipe_ts_demux->eit_enabled = enabled;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This enables or disables EITs table ID decoding.
+ *
+ * @param upipe description structure of the pipe
+ * @param enabled true to enable decoding, false otherwise
+ * @return an error code
+ */
+static int _upipe_ts_demux_set_eits_enabled(struct upipe *upipe,
+                                            bool enabled)
+{
+    struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
+    upipe_ts_demux->eits_enabled = enabled;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a ts_demux pipe.
  *
  * @param upipe description structure of the pipe
@@ -3519,6 +3555,16 @@ static int upipe_ts_demux_control(struct upipe *upipe,
                         upipe_ts_demux->private_key);
 #endif
             return UBASE_ERR_NONE;
+        }
+        case UPIPE_TS_DEMUX_SET_EIT_ENABLED: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_DEMUX_SIGNATURE);
+            int enabled = va_arg(args, int);
+            return _upipe_ts_demux_set_eit_enabled(upipe, !!enabled);
+        }
+        case UPIPE_TS_DEMUX_SET_EITS_ENABLED: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_DEMUX_SIGNATURE);
+            int enabled = va_arg(args, int);
+            return _upipe_ts_demux_set_eits_enabled(upipe, !!enabled);
         }
 
         default:
