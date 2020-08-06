@@ -447,7 +447,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFormatChanged(
             pixel_format = bmdFormat8BitARGB;
     }
 
-    upipe_bmd_src->deckLinkInput->PauseStreams();
+    upipe_bmd_src->deckLinkInput->StopStreams();
 
     if (pixel_format != upipe_bmd_src->pixel_format) {
         ubuf_mgr_release(upipe_bmd_src->pic_subpipe.ubuf_mgr);
