@@ -288,6 +288,8 @@ struct upipe_bmd_src {
     bool tff;
     /** true if we have thrown the sync_acquired event */
     bool acquired;
+    /** had input */
+    bool had_input;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -484,10 +486,53 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived(
             ubuf_pic_bmd_alloc(upipe_bmd_src->pic_subpipe.ubuf_mgr, VideoFrame);
         if (likely(ubuf != NULL)) {
             struct uref *uref = uref_alloc(upipe_bmd_src->uref_mgr);
+            bool has_input =
+                !(VideoFrame->GetFlags() & bmdFrameHasNoInputSource);
             uref_attach_ubuf(uref, ubuf);
-            uref_attr_set_priv(uref,
-                    (VideoFrame->GetFlags() & bmdFrameHasNoInputSource) ?
-                    UPIPE_BMD_SRC_PIC_NO_INPUT : UPIPE_BMD_SRC_PIC);
+            uref_attr_set_priv(uref, has_input ? UPIPE_BMD_SRC_PIC :
+                               UPIPE_BMD_SRC_PIC_NO_INPUT);
+/* from:
+ * https://www.blackmagicdesign.com/developer/support/faq/desktop-video-developer-support-faqs
+ *
+ * Audio / Video stream time offset when capturing with DeckLink Duo 2 / Quad 2
+ * in Half Duplex
+ *
+ * When starting a capture operation with the DeckLink Duo 2 / Quad 2
+ * configured as half-duplex [1], it may take a short time before input locks,
+ * as in this configuration the sub-devices which default to playback may take
+ * a short amount of time to switch from playback to capture.
+ *
+ * During this interval, there is an observable offset in the video and audio
+ * stream times as determined via IDeckLinkVideoInputFrame::GetStreamTime() [2]
+ * / IDeckLinkAudioInputPacket::GetPacketTime() [3].
+ *
+ * The recommendation is that applications should restart the streams at the no
+ * signal -> signal transition point, which will ensure synchronisation between
+ * the stream times, e.g. (in IDeckLinkInputCallback::VideoInputFrameArrived()
+ * [4]):
+ *
+ * if(hasValidInputSource && !hadValidInputSource) {
+ *     deckLinkInput->StopStreams();
+ *     deckLinkInput->FlushStreams();
+ *     deckLinkInput->StartStreams();
+ * }
+ * hadValidInputSource = hasValidInputSource;
+ *
+ * This will then result in the capture continuing as expected with
+ * synchronised stream times.
+ *
+ * [1] DeckLink SDK Manual, 2.4.11 Configurable duplex mode
+ * [2] 2.5.11.1 IDeckLinkVideoInputFrame::GetStreamTime method
+ * [3] 2.5.12.3 IDeckLinkAudioInputPacket::GetPacketTime method
+ * [4] 2.5.10.1 IDeckLinkInputCallback::VideoInputFrameArrived method
+ */
+            if (!upipe_bmd_src->had_input && has_input) {
+                upipe_notice_va(upipe, "restart stream");
+                upipe_bmd_src->deckLinkInput->StopStreams();
+                upipe_bmd_src->deckLinkInput->FlushStreams();
+                upipe_bmd_src->deckLinkInput->StartStreams();
+            }
+            upipe_bmd_src->had_input = has_input;
 
             if (cr_sys != UINT64_MAX)
                 uref_clock_set_cr_sys(uref, cr_sys);
@@ -667,6 +712,7 @@ static struct upipe *_upipe_bmd_src_alloc(struct upipe_mgr *mgr,
     upipe_bmd_src->fps.num = 25;
     upipe_bmd_src->fps.den = 1;
     upipe_bmd_src->tff = true;
+    upipe_bmd_src->had_input = false;
 
     upipe_throw_ready(upipe);
     return upipe;
