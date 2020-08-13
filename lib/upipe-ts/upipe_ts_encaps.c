@@ -536,6 +536,12 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
         upipe_ts_encaps_consume_uref(upipe);
         encaps->au_size = 0;
         encaps->need_ready = encaps->need_status = true;
+
+        /* Flush the rest of the access unit. */
+        while (encaps->uref != NULL &&
+               !ubase_check(uref_block_get_start(encaps->uref)))
+            upipe_ts_encaps_consume_uref(upipe);
+
         upipe_ts_encaps_check_status(upipe);
         return;
     }
